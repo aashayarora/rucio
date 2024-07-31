@@ -932,7 +932,8 @@ class FTS3Transfertool(Transfertool):
                 'dest_rse_id': transfer.dst.rse.id,
                 'filesize': rws.byte_count,
                 'md5': rws.md5,
-                'adler32': rws.adler32
+                'adler32': rws.adler32,
+                'rule_id': rws.rule_id
             },
             'filesize': rws.byte_count,
             'checksum': checksum_to_use,
@@ -957,6 +958,47 @@ class FTS3Transfertool(Transfertool):
         files = []
         for transfer in transfers:
             files.append(self._file_from_transfer(transfer, job_params))
+
+        # SENSE modifications
+        use_sense = config_get_bool('dmm', 'use_sense', False, None)
+        dmm_url = config_get('dmm', 'url', False, None)
+
+        dmm_response = {}
+        
+        if use_sense and dmm_url:
+            for file in files:
+                # Get rule ID
+                try:
+                    rule_id = file['metadata']['rule_id']
+                    logging.debug(f"Trying to change job endpoints for {rule_id}")
+                    if rule_id not in dmm_response.keys():
+                        logging.debug("Rule ID not in cache, getting from DMM")
+                        response = requests.get(dmm_url + '/query/' + rule_id)
+                        if response.status_code == 200:
+                            logging.debug(f"Got response 200 from DMM: {response.json()}")
+                            dmm_response[rule_id] = response.json()
+                        else:
+                            raise Exception(f"Could not get SENSE addresses for {rule_id}")
+
+                    logging.info(f"job endpoints changed for {rule_id} with sense hosts")
+                    
+                    if dmm_response[rule_id]:
+                        logging.debug("Rule ID in cache, changing job endpoints")
+                        # replacement
+                        src_url = file['sources'][0]
+                        src_hostname = src_url.split("/")[2]
+                        src_sense_url = src_url.replace(src_hostname, dmm_response[rule_id]['source'], 1)
+                        file['sources'][0] = src_sense_url
+
+                        dst_url = file['destinations'][0]
+                        dst_hostname = dst_url.split("/")[2]
+                        dst_sense_url = dst_url.replace(dst_hostname, dmm_response[rule_id]['destination'], 1)
+                        file['destinations'][0] = dst_sense_url
+                    else:
+                        raise Exception("Illegal response from DMM")
+
+                except Exception as e:
+                    logging.error(f"Error getting SENSE addresses: {e}, continuing as normal")
 
         # FTS3 expects 'davs' as the scheme identifier instead of https
         for transfer_file in files:

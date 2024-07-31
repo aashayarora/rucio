@@ -283,13 +283,13 @@ DIDS = {"description": "Array of Data Identifiers(DIDs)",
         "type": "array",
         "items": DID,
         "minItems": 1,
-        "maxItems": 3000}  # Was 1000
+        "maxItems": 50000}  # Was 1000
 
 R_DIDS = {"description": "Array of Data Identifiers(DIDs)",
           "type": "array",
           "items": R_DID,
           "minItems": 1,
-          "maxItems": 30000}
+          "maxItems": 60000}
 
 ATTACHMENT = {"description": "Attachement",
               "type": "object",
